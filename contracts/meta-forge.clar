@@ -357,3 +357,95 @@
 
 ;; Auto-initialize the deployer as the first admin
 (map-set admins tx-sender true)
+
+(define-map realms
+  { realm-id: uint }
+  {
+    name: (string-ascii 50),
+    description: (string-ascii 200),
+    min-level-req: uint,
+    active-players: uint,
+    reward-multiplier: uint
+  }
+)
+
+(define-map player-profiles
+  { player: principal }
+  {
+    character-id: uint,
+    total-score: uint,
+    games-won: uint,
+    total-earnings: uint,
+    current-rank: uint,
+    join-timestamp: uint
+  }
+)
+
+;; VALIDATION FUNCTIONS
+
+(define-private (is-valid-string (text (string-ascii 50)) (min-len uint) (max-len uint))
+  (and 
+    (>= (len text) min-len)
+    (<= (len text) max-len)
+    (> (len text) u0)
+  )
+)
+
+(define-private (is-valid-rarity (rarity (string-ascii 20)))
+  (or 
+    (is-eq rarity RARITY-COMMON)
+    (is-eq rarity RARITY-UNCOMMON)
+    (is-eq rarity RARITY-RARE)
+    (is-eq rarity RARITY-EPIC)
+    (is-eq rarity RARITY-LEGENDARY)
+  )
+)
+
+(define-private (calculate-xp-for-level (level uint))
+  (* level level BASE-XP-MULTIPLIER)
+)
+
+(define-private (can-level-up (current-xp uint) (current-level uint))
+  (>= current-xp (calculate-xp-for-level (+ current-level u1)))
+)
+
+;; READ-ONLY FUNCTIONS
+
+(define-read-only (is-admin (user principal))
+  (default-to false (map-get? admins user))
+)
+
+(define-read-only (get-item-details (item-id uint))
+  (map-get? items { item-id: item-id })
+)
+
+(define-read-only (get-character-details (character-id uint))
+  (map-get? characters { character-id: character-id })
+)
+
+(define-read-only (get-realm-info (realm-id uint))
+  (map-get? realms { realm-id: realm-id })
+)
+
+(define-read-only (get-player-profile (player principal))
+  (map-get? player-profiles { player: player })
+)
+
+(define-read-only (get-protocol-stats)
+  {
+    total-items: (- (var-get next-item-id) u1),
+    total-characters: (- (var-get next-character-id) u1),
+    total-realms: (- (var-get next-realm-id) u1),
+    prize-pool: (var-get total-prize-pool),
+    protocol-fee: (var-get protocol-fee)
+  }
+)
+
+;; ADMIN FUNCTIONS
+
+(define-public (initialize-protocol)
+  (begin
+    (map-set admins tx-sender true)
+    (ok "MetaForge Protocol Initialized")
+  )
+)
