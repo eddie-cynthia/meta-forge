@@ -449,3 +449,90 @@
     (ok "MetaForge Protocol Initialized")
   )
 )
+
+(define-public (add-admin (new-admin principal))
+  (begin
+    (asserts! (is-admin tx-sender) ERR-UNAUTHORIZED)
+    (map-set admins new-admin true)
+    (ok true)
+  )
+)
+
+(define-public (update-protocol-fee (new-fee uint))
+  (begin
+    (asserts! (is-admin tx-sender) ERR-UNAUTHORIZED)
+    (asserts! (<= new-fee u100) ERR-INVALID-INPUT)
+    (var-set protocol-fee new-fee)
+    (ok true)
+  )
+)
+
+;; CORE GAMEPLAY FUNCTIONS
+
+(define-public (forge-new-item 
+    (name (string-ascii 50))
+    (description (string-ascii 50))
+    (rarity (string-ascii 20))
+    (power-rating uint)
+    (realm-id uint)
+  )
+  (let ((item-id (var-get next-item-id)))
+    (asserts! (is-admin tx-sender) ERR-UNAUTHORIZED)
+    (asserts! (is-valid-string name MIN-NAME-LENGTH MAX-NAME-LENGTH) ERR-INVALID-INPUT)
+    (asserts! (is-valid-string description u1 MAX-DESCRIPTION-LENGTH) ERR-INVALID-INPUT)
+    (asserts! (is-valid-rarity rarity) ERR-INVALID-RARITY)
+    (asserts! (and (> power-rating u0) (<= power-rating u1000)) ERR-INVALID-INPUT)
+    (asserts! (is-some (get-realm-info realm-id)) ERR-NOT-FOUND)
+
+    (try! (nft-mint? forge-item item-id tx-sender))
+
+    (map-set items { item-id: item-id } {
+      name: name,
+      description: description,
+      rarity: rarity,
+      power-rating: power-rating,
+      origin-realm: realm-id,
+      xp-points: u0,
+      level: u1,
+      forge-time: stacks-block-height
+    })
+
+    (var-set next-item-id (+ item-id u1))
+    (ok item-id)
+  )
+)
+
+(define-public (create-character 
+    (name (string-ascii 50))
+    (starting-realm uint)
+  )
+  (let ((character-id (var-get next-character-id)))
+    (asserts! (is-valid-string name MIN-NAME-LENGTH MAX-NAME-LENGTH) ERR-INVALID-INPUT)
+    (asserts! (is-some (get-realm-info starting-realm)) ERR-NOT-FOUND)
+    (asserts! (is-none (get-player-profile tx-sender)) ERR-ALREADY-EXISTS)
+
+    (try! (nft-mint? meta-character character-id tx-sender))
+
+    (map-set characters { character-id: character-id } {
+      name: name,
+      level: u1,
+      total-xp: u0,
+      equipped-items: (list),
+      unlocked-realms: (list starting-realm),
+      achievements: u0,
+      creation-time: stacks-block-height
+    })
+
+    (map-set player-profiles { player: tx-sender } {
+      character-id: character-id,
+      total-score: u0,
+      games-won: u0,
+      total-earnings: u0,
+      current-rank: u0,
+      join-timestamp: stacks-block-height
+    })
+
+    (var-set next-character-id (+ character-id u1))
+    (ok character-id)
+  )
+)
